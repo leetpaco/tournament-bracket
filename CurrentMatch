@@ -131,21 +131,13 @@ html, body {
 const SHEET_ID   = "1Su3YeZyI7X4FR8laKP6wVz7QqAViQotHN--O9Q13_AA";
 const SHEET_NAME = "CurrentMatch";
 
-const MAP_POOL = [
-    { gametype: "Slayer",           map: "Aquarius" },
-    { gametype: "Slayer",           map: "Live Fire" },
-    { gametype: "Slayer",           map: "Origin" },
-    { gametype: "Slayer",           map: "Recharge" },
-    { gametype: "Slayer",           map: "Solitude" },
-    { gametype: "Slayer",           map: "Streets" },
-    { gametype: "Capture The Flag", map: "Aquarius" },
-    { gametype: "Capture The Flag", map: "Forbidden Fortress" },
-    { gametype: "Capture The Flag", map: "Origin" },
-    { gametype: "Oddball",          map: "Live Fire" },
-    { gametype: "Oddball",          map: "Recharge" },
-    { gametype: "Oddball",          map: "Lattice" },
-];
+const MAP_POOL = {
+    1: { gametype: "Slayer",           maps: ["Aquarius", "Live Fire", "Origin", "Recharge", "Solitude", "Streets"] },
+    2: { gametype: "Capture The Flag", maps: ["Aquarius", "Forbidden Fortress", "Origin"] },
+    3: { gametype: "Oddball",          maps: ["Live Fire", "Recharge", "Lattice"] },
+};
 
+let currentRoundNum = 1;
 let currentGametype = "—";
 let currentMap = "—";
 
@@ -173,31 +165,37 @@ async function updateMatch() {
         if (!lines.length) return;
 
         const clean = lines[0].map(p => p.replace(/^"+|"+$/g, '').trim());
-        const round   = clean[0] || "—";
-        const team1   = clean[1] || "—";
-        const team2   = clean[2] || "—";
-        const gametype = clean[3] || currentGametype;
-        const map      = clean[4] || currentMap;
+        const round    = clean[0] || "—";
+        const team1    = clean[1] || "—";
+        const team2    = clean[2] || "—";
+
+        // Extract round number from e.g. "Round 1", "Round 2", "Round 3"
+        const roundMatch = round.match(/(\d+)/);
+        currentRoundNum = roundMatch ? parseInt(roundMatch[1]) : 1;
+        const pool = MAP_POOL[currentRoundNum] || MAP_POOL[1];
 
         document.getElementById("round-label").innerText = round;
         document.getElementById("team1").innerText = team1;
         document.getElementById("team2").innerText = team2;
-        document.getElementById("gametype").innerText = gametype;
-        document.getElementById("map").innerText = map;
+        document.getElementById("gametype").innerText = pool.gametype;
 
-        currentGametype = gametype;
-        currentMap = map;
+        // Only update map display if it hasn't been randomized yet for this round
+        if (currentGametype !== pool.gametype) {
+            document.getElementById("map").innerText = "— Pick Map —";
+            currentMap = "—";
+        }
+
+        currentGametype = pool.gametype;
     } catch (err) {
         console.error("Failed to load match data:", err);
     }
 }
 
 function randomizePick() {
-    const pick = MAP_POOL[Math.floor(Math.random() * MAP_POOL.length)];
-    document.getElementById("gametype").innerText = pick.gametype;
-    document.getElementById("map").innerText = pick.map;
-    currentGametype = pick.gametype;
-    currentMap = pick.map;
+    const pool = MAP_POOL[currentRoundNum] || MAP_POOL[1];
+    const map = pool.maps[Math.floor(Math.random() * pool.maps.length)];
+    document.getElementById("map").innerText = map;
+    currentMap = map;
 }
 
 setInterval(updateMatch, 500);
