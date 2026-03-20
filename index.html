@@ -5,87 +5,84 @@
 <title>Tournament Bracket</title>
 <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@800;900&display=swap" rel="stylesheet">
 <style>
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
-    margin: 0;
-    padding: 0;
     width: 1920px;
     height: 1080px;
     overflow: hidden;
     background: transparent;
     font-family: 'League Spartan', sans-serif;
 }
-.bracket {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
+#bracket {
+    position: relative;
     width: 1920px;
     height: 1080px;
-    padding: 30px 40px;
-    gap: 0;
+}
+svg#connectors {
+    position: absolute;
+    top: 0; left: 0;
+    width: 1920px;
+    height: 1080px;
+    pointer-events: none;
 }
 .column {
+    position: absolute;
+    top: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    flex: 1;
-    height: 100%;
-    gap: 16px;
-    padding-top: 10px;
 }
 .column-title {
-    font-size: 26px;
+    font-size: 32px;
     font-weight: 900;
     color: #ffffff;
     text-transform: uppercase;
-    text-align: center;
     text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
     border-bottom: 3px solid #00ff66;
-    padding-bottom: 6px;
-    margin-bottom: 6px;
+    padding-bottom: 8px;
+    margin-bottom: 20px;
     display: inline-block;
-}
-.round-title {
-    font-size: 18px;
-    color: #00ff66;
-    text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    text-align: center;
+    margin-top: 30px;
 }
 .match {
-    position: relative;
-    width: 260px;
     background: rgba(0,0,0,0.85);
-    padding: 12px 16px;
-    border-radius: 10px;
+    padding: 16px 24px;
+    border-radius: 12px;
     text-align: center;
     color: white;
     font-weight: 900;
+    white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.round-title {
+    font-size: 16px;
+    color: #00ff66;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
+    margin-bottom: 6px;
+    text-transform: uppercase;
 }
 .vs {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 900;
     color: #ffffff;
-    opacity: 0.5;
-    margin: 2px 0;
+    opacity: 0.4;
+    margin: 4px 0;
 }
 .team {
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 900;
 }
 .team.winner { color: #ffcc00; }
 .team.loser {
-    color: #cccccc;
+    color: #888;
     text-decoration: line-through;
 }
 </style>
 </head>
 <body>
-
-<div class="bracket" id="bracket-container"></div>
+<div id="bracket">
+    <svg id="connectors"></svg>
+</div>
 
 <script>
 const SHEET_ID   = "1Su3YeZyI7X4FR8laKP6wVz7QqAViQotHN--O9Q13_AA";
@@ -97,21 +94,23 @@ const COLUMN_TITLES = {
     3: "Final"
 };
 
+// Layout config
+const W = 1920, H = 1080;
+const MATCH_W = 380;
+const MATCH_H = 110;
+const COL_PAD_TOP = 100; // space for title
+const CONNECTOR_COLOR = "#00ff66";
+const CONNECTOR_WIDTH = 2;
+
 function parseCSV(text) {
     return text.split("\n").map(line => {
         const cols = [];
-        let current = '';
-        let inQuotes = false;
+        let current = '', inQuotes = false;
         for (let i = 0; i < line.length; i++) {
             const ch = line[i];
-            if (ch === '"') {
-                inQuotes = !inQuotes;
-            } else if (ch === ',' && !inQuotes) {
-                cols.push(current.trim());
-                current = '';
-            } else {
-                current += ch;
-            }
+            if (ch === '"') { inQuotes = !inQuotes; }
+            else if (ch === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
+            else { current += ch; }
         }
         cols.push(current.trim());
         return cols;
@@ -119,6 +118,22 @@ function parseCSV(text) {
         const first = row[0].replace(/"/g, '').trim();
         return row.length >= 4 && first !== '' && !isNaN(parseInt(first));
     });
+}
+
+function buildMatchEl(match) {
+    const winnerTrim = match.winner.trim();
+    const t1 = match.team1, t2 = match.team2;
+    const t1c = winnerTrim && winnerTrim === t1 ? 'winner' : (winnerTrim ? 'loser' : '');
+    const t2c = winnerTrim && winnerTrim === t2 ? 'winner' : (winnerTrim ? 'loser' : '');
+    const el = document.createElement("div");
+    el.className = "match";
+    el.innerHTML = `
+        <div class="round-title">${match.round}</div>
+        <div class="team ${t1c}">${t1}</div>
+        <div class="vs">VS</div>
+        <div class="team ${t2c}">${t2}</div>
+    `;
+    return el;
 }
 
 async function updateBracket() {
@@ -130,98 +145,132 @@ async function updateBracket() {
 
         const columns = {};
         const allMatches = [];
-
-        lines.forEach((parts) => {
+        lines.forEach(parts => {
             const clean = parts.map(p => p.replace(/^"+|"+$/g, '').trim());
-            const col    = parseInt(clean[0]);
-            const round  = clean[1] || '';
-            const team1  = clean[2] || '';
-            const team2  = clean[3] || '';
-            const winner = clean[4] || '';
-            const loser  = winner ? (winner === team1 ? team2 : team1) : '';
+            const col = parseInt(clean[0]);
+            const round = clean[1] || '', team1 = clean[2] || '', team2 = clean[3] || '', winner = clean[4] || '';
+            const loser = winner ? (winner === team1 ? team2 : team1) : '';
             allMatches.push({ col, round, team1, team2, winner, loser });
             if (!columns[col]) columns[col] = [];
             columns[col].push(allMatches[allMatches.length - 1]);
         });
 
-        const winnerMap = {};
-        const loserMap  = {};
+        const winnerMap = {}, loserMap = {};
         allMatches.forEach(m => {
-            if (m.winner) {
-                winnerMap[m.round] = m.winner;
-                loserMap[m.round]  = m.loser;
-            }
+            if (m.winner) { winnerMap[m.round] = m.winner; loserMap[m.round] = m.loser; }
         });
 
         function resolveShorthand(key) {
-            const mMatch  = key.match(/^M(\d+)$/i);
-            if (mMatch)  return `Round ${mMatch[1]}`;
-            const rMatch  = key.match(/^R(\d+)$/i);
-            if (rMatch)  return `Round ${rMatch[1]}`;
-            const qfMatch = key.match(/^QF(\d+)$/i);
-            if (qfMatch) return `Quarter Final ${qfMatch[1]}`;
-            const sfMatch = key.match(/^SF(\d+)$/i);
-            if (sfMatch) return `Semi Final ${sfMatch[1]}`;
+            const m = key.match(/^M(\d+)$/i); if (m) return `Round ${m[1]}`;
+            const r = key.match(/^R(\d+)$/i); if (r) return `Round ${r[1]}`;
+            const qf = key.match(/^QF(\d+)$/i); if (qf) return `Quarter Final ${qf[1]}`;
+            const sf = key.match(/^SF(\d+)$/i); if (sf) return `Semi Final ${sf[1]}`;
             return null;
         }
-
         function resolve(name) {
-            const winnerMatch = name.match(/Winner of (.+)/i);
-            if (winnerMatch) {
-                const key = winnerMatch[1].trim();
-                if (winnerMap[key]) return winnerMap[key];
-                const resolved = resolveShorthand(key);
-                if (resolved && winnerMap[resolved]) return winnerMap[resolved];
-            }
-            const loserMatch = name.match(/Loser of (.+)/i);
-            if (loserMatch) {
-                const key = loserMatch[1].trim();
-                if (loserMap[key]) return loserMap[key];
-                const resolved = resolveShorthand(key);
-                if (resolved && loserMap[resolved]) return loserMap[resolved];
-            }
+            const wm = name.match(/Winner of (.+)/i);
+            if (wm) { const k = wm[1].trim(); if (winnerMap[k]) return winnerMap[k]; const s = resolveShorthand(k); if (s && winnerMap[s]) return winnerMap[s]; }
+            const lm = name.match(/Loser of (.+)/i);
+            if (lm) { const k = lm[1].trim(); if (loserMap[k]) return loserMap[k]; const s = resolveShorthand(k); if (s && loserMap[s]) return loserMap[s]; }
             return name;
         }
+        allMatches.forEach(m => { m.team1 = resolve(m.team1); m.team2 = resolve(m.team2); });
 
-        allMatches.forEach(m => {
-            m.team1 = resolve(m.team1);
-            m.team2 = resolve(m.team2);
-        });
-
-        const container = document.getElementById("bracket-container");
-        container.innerHTML = "";
+        const bracket = document.getElementById("bracket");
+        const svg = document.getElementById("connectors");
+        // Clear previous (keep svg)
+        Array.from(bracket.children).forEach(c => { if (c !== svg) c.remove(); });
+        svg.innerHTML = "";
 
         const colKeys = Object.keys(columns).map(Number).sort((a, b) => a - b);
+        const numCols = colKeys.length;
+        const colWidth = W / numCols;
 
-        colKeys.forEach(colNum => {
-            const col = document.createElement("div");
-            col.className = "column";
+        // Store match center positions for drawing connectors: { round: {x, y, right} }
+        const matchPositions = {};
 
-            const title = document.createElement("div");
-            title.className = "column-title";
-            title.innerText = COLUMN_TITLES[colNum] || `Round ${colNum}`;
-            col.appendChild(title);
+        colKeys.forEach((colNum, ci) => {
+            const matches = columns[colNum];
+            const numMatches = matches.length;
+            const colX = ci * colWidth;
 
-            columns[colNum].forEach(match => {
-                const matchDiv = document.createElement("div");
-                matchDiv.className = "match";
+            // Column div
+            const colEl = document.createElement("div");
+            colEl.className = "column";
+            colEl.style.left = colX + "px";
+            colEl.style.width = colWidth + "px";
+            colEl.style.height = H + "px";
+            colEl.style.justifyContent = "flex-start";
 
-                const winnerTrim = match.winner.trim();
-                const t1 = match.team1;
-                const t2 = match.team2;
-                const team1Class = winnerTrim && winnerTrim === t1 ? 'winner' : (winnerTrim ? 'loser' : '');
-                const team2Class = winnerTrim && winnerTrim === t2 ? 'winner' : (winnerTrim ? 'loser' : '');
+            // Title
+            const titleEl = document.createElement("div");
+            titleEl.className = "column-title";
+            titleEl.innerText = COLUMN_TITLES[colNum] || `Round ${colNum}`;
+            colEl.appendChild(titleEl);
 
-                matchDiv.innerHTML = `
-                    <div class="round-title">${match.round}</div>
-                    <div class="team ${team1Class}">${t1}</div>
-                    <div class="vs">VS</div>
-                    <div class="team ${team2Class}">${t2}</div>
-                `;
-                col.appendChild(matchDiv);
+            // Calculate vertical spacing for matches
+            const availH = H - COL_PAD_TOP;
+            const gap = numMatches > 1 ? (availH - numMatches * MATCH_H) / (numMatches + 1) : (availH - MATCH_H) / 2;
+
+            matches.forEach((match, mi) => {
+                const matchEl = buildMatchEl(match);
+                matchEl.style.width = MATCH_W + "px";
+                matchEl.style.position = "absolute";
+
+                const matchY = COL_PAD_TOP + gap + mi * (MATCH_H + gap);
+                const matchX = colX + (colWidth - MATCH_W) / 2;
+                matchEl.style.top = matchY + "px";
+                matchEl.style.left = (colWidth - MATCH_W) / 2 + "px";
+
+                colEl.appendChild(matchEl);
+
+                // Store center position
+                const centerY = matchY + MATCH_H / 2;
+                const rightX = matchX + MATCH_W;
+                matchPositions[match.round] = { x: matchX, y: centerY, rightX };
             });
 
-            container.appendChild(col);
+            bracket.appendChild(colEl);
+        });
+
+        // Draw connectors: for each match in col 2+, find its two source matches and draw lines
+        // We need to know which rounds feed into which
+        // Re-parse original lines to get unresolved team names for connector mapping
+        const rawMatches = [];
+        lines.forEach(parts => {
+            const clean = parts.map(p => p.replace(/^"+|"+$/g, '').trim());
+            rawMatches.push({ col: parseInt(clean[0]), round: clean[1] || '', team1Raw: clean[2] || '', team2Raw: clean[3] || '' });
+        });
+
+        rawMatches.forEach(m => {
+            if (m.col < 2) return;
+            const destPos = matchPositions[m.round];
+            if (!destPos) return;
+
+            [m.team1Raw, m.team2Raw].forEach(teamRaw => {
+                const wm = teamRaw.match(/Winner of (.+)/i);
+                if (!wm) return;
+                let sourceRound = wm[1].trim();
+                const short = resolveShorthand(sourceRound);
+                if (short) sourceRound = short;
+                const srcPos = matchPositions[sourceRound];
+                if (!srcPos) return;
+
+                // Draw an elbow connector: right edge of source -> left edge of dest
+                const x1 = srcPos.rightX;
+                const y1 = srcPos.y;
+                const x2 = destPos.x;
+                const y2 = destPos.y;
+                const midX = (x1 + x2) / 2;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`);
+                path.setAttribute("stroke", CONNECTOR_COLOR);
+                path.setAttribute("stroke-width", CONNECTOR_WIDTH);
+                path.setAttribute("fill", "none");
+                path.setAttribute("opacity", "0.6");
+                svg.appendChild(path);
+            });
         });
 
     } catch (err) {
@@ -232,6 +281,5 @@ async function updateBracket() {
 setInterval(updateBracket, 500);
 updateBracket();
 </script>
-
 </body>
 </html>
