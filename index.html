@@ -55,21 +55,21 @@ svg#connectors {
     border: 1px solid rgba(255,255,255,0.08);
 }
 .round-title {
-    font-size: 18px;
+    font-size: 16px;
     color: #00ff66;
     text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
     margin-bottom: 4px;
     text-transform: uppercase;
 }
 .vs {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 900;
     color: #ffffff;
     opacity: 0.5;
     margin: 2px 0;
 }
 .team {
-    font-size: 20px;
+    font-size: 26px;
     font-weight: 900;
 }
 .team.winner { color: #ffcc00; }
@@ -94,11 +94,10 @@ const COLUMN_TITLES = {
     3: "Final"
 };
 
-// Layout config
 const W = 1920, H = 1080;
 const MATCH_W = 340;
-const MATCH_H = 95;
-const COL_PAD_TOP = 160; // space for title
+const MATCH_H = 110;
+const COL_PAD_TOP = 160;
 const CONNECTOR_COLOR = "#00ff66";
 const CONNECTOR_WIDTH = 2;
 
@@ -178,15 +177,12 @@ async function updateBracket() {
 
         const bracket = document.getElementById("bracket");
         const svg = document.getElementById("connectors");
-        // Clear previous (keep svg)
         Array.from(bracket.children).forEach(c => { if (c !== svg) c.remove(); });
         svg.innerHTML = "";
 
         const colKeys = Object.keys(columns).map(Number).sort((a, b) => a - b);
         const numCols = colKeys.length;
         const colWidth = W / numCols;
-
-        // Store match center positions for drawing connectors: { round: {x, y, right} }
         const matchPositions = {};
 
         colKeys.forEach((colNum, ci) => {
@@ -194,7 +190,6 @@ async function updateBracket() {
             const numMatches = matches.length;
             const colX = ci * colWidth;
 
-            // Column div
             const colEl = document.createElement("div");
             colEl.className = "column";
             colEl.style.left = colX + "px";
@@ -202,29 +197,27 @@ async function updateBracket() {
             colEl.style.height = H + "px";
             colEl.style.justifyContent = "flex-start";
 
-            // Title
             const titleEl = document.createElement("div");
             titleEl.className = "column-title";
             titleEl.innerText = COLUMN_TITLES[colNum] || `Round ${colNum}`;
             colEl.appendChild(titleEl);
 
-            // Calculate vertical spacing for matches
-            const availH = H - COL_PAD_TOP;
-            const gap = numMatches > 1 ? (availH - numMatches * MATCH_H) / (numMatches + 1) : (availH - MATCH_H) / 2;
+            const GAP = 20;
+            const totalMatchH = numMatches * MATCH_H + (numMatches - 1) * GAP;
+            const startY = COL_PAD_TOP + (H - COL_PAD_TOP - totalMatchH) / 2;
 
             matches.forEach((match, mi) => {
                 const matchEl = buildMatchEl(match);
                 matchEl.style.width = MATCH_W + "px";
                 matchEl.style.position = "absolute";
 
-                const matchY = COL_PAD_TOP + gap + mi * (MATCH_H + gap);
+                const matchY = startY + mi * (MATCH_H + GAP);
                 const matchX = colX + (colWidth - MATCH_W) / 2;
                 matchEl.style.top = matchY + "px";
                 matchEl.style.left = (colWidth - MATCH_W) / 2 + "px";
 
                 colEl.appendChild(matchEl);
 
-                // Store center position
                 const centerY = matchY + MATCH_H / 2;
                 const rightX = matchX + MATCH_W;
                 matchPositions[match.round] = { x: matchX, y: centerY, rightX };
@@ -233,9 +226,6 @@ async function updateBracket() {
             bracket.appendChild(colEl);
         });
 
-        // Draw connectors: for each match in col 2+, find its two source matches and draw lines
-        // We need to know which rounds feed into which
-        // Re-parse original lines to get unresolved team names for connector mapping
         const rawMatches = [];
         lines.forEach(parts => {
             const clean = parts.map(p => p.replace(/^"+|"+$/g, '').trim());
@@ -256,7 +246,6 @@ async function updateBracket() {
                 const srcPos = matchPositions[sourceRound];
                 if (!srcPos) return;
 
-                // Draw an elbow connector: right edge of source -> left edge of dest
                 const x1 = srcPos.rightX;
                 const y1 = srcPos.y;
                 const x2 = destPos.x;
