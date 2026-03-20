@@ -44,8 +44,8 @@ html, body {
     text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
     border-bottom: 3px solid #00ff66;
     padding-bottom: 6px;
-    width: 100%;
     margin-bottom: 6px;
+    display: inline-block;
 }
 .round-title {
     font-size: 18px;
@@ -88,52 +88,56 @@ html, body {
 <div class="bracket" id="bracket-container"></div>
 
 <script>
-// ============================================================
-//  GOOGLE SHEET CONFIG
-//  Sheet must be published: File → Share → Publish to web
-//  → Select your sheet tab → CSV format → Publish
-// ============================================================
 const SHEET_ID   = "1Su3YeZyI7X4FR8laKP6wVz7QqAViQotHN--O9Q13_AA";
-const SHEET_NAME = "Sheet1"; // Change if your tab has a different name
-// ============================================================
+const SHEET_NAME = "Sheet1";
 
 const COLUMN_TITLES = {
     1: "Match Play",
-    2: "Second Chance Match",
-    3: "Quarter Finals",
-    4: "Finals"
+    2: "Semi Finals",
+    3: "Final"
 };
+
+function parseCSV(text) {
+    return text.split("\n").map(line => {
+        const cols = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') {
+                inQuotes = !inQuotes;
+            } else if (ch === ',' && !inQuotes) {
+                cols.push(current.trim());
+                current = '';
+            } else {
+                current += ch;
+            }
+        }
+        cols.push(current.trim());
+        return cols;
+    }).filter(row => {
+        const first = row[0].replace(/"/g, '').trim();
+        return row.length >= 4 && first !== '' && !isNaN(parseInt(first));
+    });
+}
 
 async function updateBracket() {
     try {
         const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&t=${Date.now()}`;
         const response = await fetch(url);
         const text = await response.text();
-
-        // Parse CSV (handles quoted fields)
-        const lines = text.split("\n").map(line => {
-            const cols = [];
-            let current = '';
-            let inQuotes = false;
-            for (let i = 0; i < line.length; i++) {
-                const ch = line[i];
-                if (ch === '"') { inQuotes = !inQuotes; }
-                else if (ch === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
-                else { current += ch; }
-            }
-            cols.push(current.trim());
-            return cols;
-        }).filter(row => row.length >= 4 && row[0] !== '' && !isNaN(parseInt(row[0])));
+        const lines = parseCSV(text);
 
         const columns = {};
         const allMatches = [];
 
         lines.forEach((parts) => {
-            const col    = parseInt(parts[0]);
-            const round  = parts[1] || '';
-            const team1  = parts[2] || '';
-            const team2  = parts[3] || '';
-            const winner = parts[4] ? parts[4] : '';
+            const clean = parts.map(p => p.replace(/^"+|"+$/g, '').trim());
+            const col    = parseInt(clean[0]);
+            const round  = clean[1] || '';
+            const team1  = clean[2] || '';
+            const team2  = clean[3] || '';
+            const winner = clean[4] || '';
             const loser  = winner ? (winner === team1 ? team2 : team1) : '';
             allMatches.push({ col, round, team1, team2, winner, loser });
             if (!columns[col]) columns[col] = [];
