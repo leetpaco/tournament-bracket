@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Current Match</title>
+<link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: transparent;
+    font-family: 'League Spartan', sans-serif;
+}
+
+#wrapper {
+    position: absolute;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+#match-card {
+    background: rgba(0,0,0,0.88);
+    border-radius: 16px;
+    padding: 28px 60px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.08);
+    min-width: 900px;
+}
+
+#round-label {
+    font-size: 20px;
+    font-weight: 900;
+    color: #00ff66;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+}
+
+#teams {
+    font-size: 52px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 2px 2px 12px rgba(0,0,0,0.8);
+    margin-bottom: 14px;
+    white-space: nowrap;
+}
+
+#teams .vs {
+    font-size: 28px;
+    color: #ffffff;
+    opacity: 0.4;
+    margin: 0 20px;
+}
+
+#game-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+#gametype {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffcc00;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#divider {
+    font-size: 22px;
+    color: #ffffff;
+    opacity: 0.3;
+    margin: 0 16px;
+}
+
+#map {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#randomize-btn {
+    background: #00ff66;
+    color: #000000;
+    font-family: 'League Spartan', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 36px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+#randomize-btn:hover { background: #00cc55; }
+#randomize-btn:active { transform: scale(0.97); }
+#randomize-btn.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="wrapper">
+    <div id="match-card">
+        <div id="round-label">—</div>
+        <div id="teams">
+            <span id="team1">—</span>
+            <span class="vs">VS</span>
+            <span id="team2">—</span>
+        </div>
+        <div id="game-info">
+            <span id="gametype">—</span>
+            <span id="divider">|</span>
+            <span id="map">—</span>
+        </div>
+    </div>
+    <button id="randomize-btn" onclick="randomizePick()">🎲 Randomize Game &amp; Map</button>
+</div>
+
+<script>
+const SHEET_ID   = "1Su3YeZyI7X4FR8laKP6wVz7QqAViQotHN--O9Q13_AA";
+const SHEET_NAME = "CurrentMatch";
+
+const MAP_POOL = [
+    { gametype: "Slayer",           map: "Aquarius" },
+    { gametype: "Slayer",           map: "Live Fire" },
+    { gametype: "Slayer",           map: "Origin" },
+    { gametype: "Slayer",           map: "Recharge" },
+    { gametype: "Slayer",           map: "Solitude" },
+    { gametype: "Slayer",           map: "Streets" },
+    { gametype: "Capture The Flag", map: "Aquarius" },
+    { gametype: "Capture The Flag", map: "Forbidden Fortress" },
+    { gametype: "Capture The Flag", map: "Origin" },
+    { gametype: "Oddball",          map: "Live Fire" },
+    { gametype: "Oddball",          map: "Recharge" },
+    { gametype: "Oddball",          map: "Lattice" },
+];
+
+let currentGametype = "—";
+let currentMap = "—";
+
+function parseCSV(text) {
+    return text.split("\n").map(line => {
+        const cols = [];
+        let current = '', inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') { inQuotes = !inQuotes; }
+            else if (ch === ',' && !inQuotes) { cols.push(current.trim()); current = ''; }
+            else { current += ch; }
+        }
+        cols.push(current.trim());
+        return cols;
+    }).filter(row => row.some(c => c !== ''));
+}
+
+async function updateMatch() {
+    try {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}&t=${Date.now()}`;
+        const response = await fetch(url);
+        const text = await response.text();
+        const lines = parseCSV(text);
+        if (!lines.length) return;
+
+        const clean = lines[0].map(p => p.replace(/^"+|"+$/g, '').trim());
+        const round   = clean[0] || "—";
+        const team1   = clean[1] || "—";
+        const team2   = clean[2] || "—";
+        const gametype = clean[3] || currentGametype;
+        const map      = clean[4] || currentMap;
+
+        document.getElementById("round-label").innerText = round;
+        document.getElementById("team1").innerText = team1;
+        document.getElementById("team2").innerText = team2;
+        document.getElementById("gametype").innerText = gametype;
+        document.getElementById("map").innerText = map;
+
+        currentGametype = gametype;
+        currentMap = map;
+    } catch (err) {
+        console.error("Failed to load match data:", err);
+    }
+}
+
+function randomizePick() {
+    const pick = MAP_POOL[Math.floor(Math.random() * MAP_POOL.length)];
+    document.getElementById("gametype").innerText = pick.gametype;
+    document.getElementById("map").innerText = pick.map;
+    currentGametype = pick.gametype;
+    currentMap = pick.map;
+}
+
+setInterval(updateMatch, 500);
+updateMatch();
+</script>
+
+</body>
+</html>
